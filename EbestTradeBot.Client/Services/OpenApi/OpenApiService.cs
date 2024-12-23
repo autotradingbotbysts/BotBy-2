@@ -82,6 +82,7 @@ namespace EbestTradeBot.Client.Services.OpenApi
                         Shcode = data.Expcode,
                         Hname = data.Hname,
                         보유량 = data.Mdposqt,
+                        평단가 = data.Pamt,
                     });
                 }
 

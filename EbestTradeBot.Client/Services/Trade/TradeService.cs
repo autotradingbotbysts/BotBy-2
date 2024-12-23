@@ -100,8 +100,6 @@ namespace EbestTradeBot.Client.Services.Trade
                         foreach (var stock in searchedStocks)
                         {
                             if (
-                                stock.매수가_1차 >= stock.현재가 && // 1차 매수가 도착
-                                !(stock.현재가 > stock.익절가 || stock.현재가 < stock.손절가) && // 익절가, 손절가 범위 내
                                 !accountStocksForBuying.Any(x => x.Shcode == stock.Shcode) && // 보유중인 종목이 아님
                                 !tradingStocks.Contains(stock.Shcode)) // 현재 매매중인 종목이 아님
                             {
@@ -233,14 +231,13 @@ namespace EbestTradeBot.Client.Services.Trade
             var tradingPriceData = ReadDataFromCsv().Where(x => x.Date == DateTime.Now.ToString("yyyyMMdd"));
             var shcodes = tradingPriceData.Select(x => x.Shcode).ToList();
 
-            var calcStocks = stocks.Where(x => shcodes.Contains(x.Shcode)).ToList();
             var nonCalcStocks = stocks.Where(x => !shcodes.Contains(x.Shcode)).ToList();
+            var calcStocks = stocks.Where(x => shcodes.Contains(x.Shcode)).ToList();
             foreach (var stock in calcStocks)
             {
                 var tradingPrice = tradingPriceData.FirstOrDefault(x => x.Shcode == stock.Shcode);
                 if (tradingPrice != null)
                 {
-                    stock.매수가_1차 = tradingPrice.매수가_1차;
                     stock.매수가_2차 = tradingPrice.매수가_2차;
                     stock.익절가 = tradingPrice.익절가;
                     stock.손절가 = tradingPrice.손절가;
@@ -254,7 +251,7 @@ namespace EbestTradeBot.Client.Services.Trade
                 Date = DateTime.Now.ToString("yyyyMMdd"),
                 Hname = x.Hname,
                 Shcode = x.Shcode,
-                매수가_1차 = x.매수가_1차,
+                평단가 = x.평단가,
                 매수가_2차 = x.매수가_2차,
                 익절가 = x.익절가,
                 손절가 = x.손절가
@@ -269,40 +266,6 @@ namespace EbestTradeBot.Client.Services.Trade
             var stocks = await GetSearchShcodes(_defaultOptions.IsTestTrade);
             await _openApi.GetCurrentPrice(stocks, _cancellationTokenSource.Token);
             if (_cancellationTokenSource.Token.IsCancellationRequested) return [];
-
-            var tradingPriceData = ReadDataFromCsv().Where(x => x.Date == DateTime.Now.ToString("yyyyMMdd"));
-            var shcodes = tradingPriceData.Select(x => x.Shcode).ToList();
-
-            var calcStocks = stocks.Where(x => shcodes.Contains(x.Shcode)).ToList();
-            var nonCalcStocks = stocks.Where(x => !shcodes.Contains(x.Shcode)).ToList();
-            foreach (var stock in calcStocks)
-            {
-                var tradingPrice = tradingPriceData.FirstOrDefault(x => x.Shcode == stock.Shcode);
-                if (tradingPrice != null)
-                {
-                    stock.매수가_1차 = tradingPrice.매수가_1차;
-                    stock.매수가_2차 = tradingPrice.매수가_2차;
-                    stock.익절가 = tradingPrice.익절가;
-                    stock.손절가 = tradingPrice.손절가;
-                }
-            }
-
-            await _openApi.SetTradingPrice(nonCalcStocks, _cancellationTokenSource.Token);
-            if (_cancellationTokenSource.Token.IsCancellationRequested) return [];
-
-            nonCalcStocks.RemoveAll(x => x.매수가_1차 < 0);
-            stocks.RemoveAll(x => x.매수가_1차 < 0);
-            var nonCalcTradingPriceData = nonCalcStocks.Select(x => new TradingPriceData
-            {
-                Date = DateTime.Now.ToString("yyyyMMdd"),
-                Hname = x.Hname,
-                Shcode = x.Shcode,
-                매수가_1차 = x.매수가_1차,
-                매수가_2차 = x.매수가_2차,
-                익절가 = x.익절가,
-                손절가 = x.손절가
-            }).ToList();
-            WriteDataToCsv(nonCalcTradingPriceData);
 
             return stocks;
         }
@@ -384,7 +347,7 @@ namespace EbestTradeBot.Client.Services.Trade
 
         private bool CheckFirstTrade(Stock stock)
         {
-            return (_defaultOptions.TradePrice * (decimal)1.1) - (stock.매수가_1차 * stock.보유량) < 0;
+            return (_defaultOptions.TradePrice * (decimal)1.1) - (stock.평단가 * stock.보유량) < 0;
         }
 
         private static List<Stock> DeepCopyStocks(List<Stock> original)
@@ -409,7 +372,7 @@ namespace EbestTradeBot.Client.Services.Trade
                                 $"[{stock.Hname}({stock.Shcode})] " +
                                 $"[익절가:{stock.익절가}] " +
                                 $"[손절가:{stock.손절가}] " +
-                                $"[1차 매수가:{stock.매수가_1차}] " +
+                                $"[평단가:{stock.평단가}] " +
                                 $"[2차 매수가:{stock.매수가_2차}]"));
             }
 

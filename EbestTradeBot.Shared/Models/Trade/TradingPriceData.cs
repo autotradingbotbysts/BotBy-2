@@ -14,7 +14,7 @@ namespace EbestTradeBot.Shared.Models.Trade
         public string Shcode { get; set; } = string.Empty;
         public int 익절가 { get; set; } = int.MinValue;
         public int 손절가 { get; set; } = int.MinValue;
-        public int 매수가_1차 { get; set; } = int.MinValue;
+        public int 평단가 { get; set; } = int.MinValue;
         public int 매수가_2차 { get; set; } = int.MinValue;
     }
     public class TradingPriceDataMap : ClassMap<TradingPriceData>
@@ -26,9 +26,8 @@ namespace EbestTradeBot.Shared.Models.Trade
             Map(m => m.Shcode).Name("Shcode");
             Map(m => m.익절가).Name("익절가");
             Map(m => m.손절가).Name("손절가");
-            Map(m => m.매수가_1차).Name("매수가_1차");
+            Map(m => m.평단가).Name("평단가");
             Map(m => m.매수가_2차).Name("매수가_2차");
         }
     }
-
 }
