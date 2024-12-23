@@ -38,6 +38,7 @@ namespace EbestTradeBot.Client.Services.Trade
         private readonly ILogService _log;
 
         private CancellationTokenSource _cancellationTokenSource = new();
+        private bool _isMesu = false;
 
         public event EventHandler WriteLog;
         public event EventHandler StopTradeEvent;
@@ -66,14 +67,6 @@ namespace EbestTradeBot.Client.Services.Trade
 
             while (!_cancellationTokenSource.Token.IsCancellationRequested)
             {
-                DateTime now = DateTime.Now;
-
-                // 09:00 ~ 15:30 일경우 StopTrade() 호출
-                if (now.Hour < 9 || now.TimeOfDay >= new TimeSpan(15, 31, 00))
-                {
-                    throw new MarketClosedException();
-                }
-
                 Task? buyTask = null;
                 Task? sellTask = null;
 
@@ -82,8 +75,22 @@ namespace EbestTradeBot.Client.Services.Trade
 
                 try
                 {
-                    var searchedStocks = await SearchStocks();
-                    if (_cancellationTokenSource.Token.IsCancellationRequested) break;
+                    var now = DateTime.Now;
+                    TimeSpan startTime = _defaultOptions.StartTime.TimeOfDay;
+                    TimeSpan endTime = _defaultOptions.EndTime.TimeOfDay;
+
+                    if (now.TimeOfDay < startTime || now.TimeOfDay >= endTime)
+                    {
+                        throw new MarketClosedException();
+                    }
+
+                    var searchedStocks = new List<Stock>();
+                    if (!_isMesu)
+                    {
+                        searchedStocks = await SearchStocks();
+                        _isMesu = true;
+                        if (_cancellationTokenSource.Token.IsCancellationRequested) break;
+                    }
 
                     var accountStocksForBuying = await GetAccountStocks();
                     if (_cancellationTokenSource.Token.IsCancellationRequested) break;
@@ -96,7 +103,7 @@ namespace EbestTradeBot.Client.Services.Trade
 
                     buyTask = Task.Run(async () =>
                     {
-                        // 1차 매수
+                        // 매수
                         foreach (var stock in searchedStocks)
                         {
                             if (
@@ -104,27 +111,8 @@ namespace EbestTradeBot.Client.Services.Trade
                                 !tradingStocks.Contains(stock.Shcode)) // 현재 매매중인 종목이 아님
                             {
                                 // 매수
-                                WriteLog?.Invoke(this, new LogEventArgs($"[{stock.Hname}({stock.Shcode})] [1차 매수]"));
-                                await _log.WriteLog(new() { StockName = stock.Hname, Note = "1차 매수" });
-                                await BuyStock(stock);
-                                if (_cancellationTokenSource.Token.IsCancellationRequested) break;
-                            }
-                        }
-
-                        if (_cancellationTokenSource.Token.IsCancellationRequested) return;
-
-                        // 2차 매수
-                        foreach (var stock in accountStocksForBuying)
-                        {
-                            if (
-                                stock.매수가_2차 >= stock.현재가 && // 2차 매수가 도착
-                                !(stock.현재가 > stock.익절가 || stock.현재가 < stock.손절가) && // 익절가, 손절가 범위 내
-                                CheckFirstTrade(stock) && // 1차 매수 체크
-                                !tradingStocks.Contains(stock.Shcode)) // 현재 매매중인 종목이 아님
-                            {
-                                // 매수
-                                WriteLog?.Invoke(this, new LogEventArgs($"[{stock.Hname}({stock.Shcode})] [2차 매수]"));
-                                await _log.WriteLog(new() { StockName = stock.Hname, Note = "2차 매수" });
+                                WriteLog?.Invoke(this, new LogEventArgs($"[{stock.Hname}({stock.Shcode})] [매수]"));
+                                await _log.WriteLog(new() { StockName = stock.Hname, Note = "매수" });
                                 await BuyStock(stock);
                                 if (_cancellationTokenSource.Token.IsCancellationRequested) break;
                             }
@@ -150,6 +138,12 @@ namespace EbestTradeBot.Client.Services.Trade
                 }
                 catch(MarketClosedException)
                 {
+                    if(_isMesu)
+                    {
+                        await SellAllStocks();
+                    }
+
+                    _isMesu = false;
                     continue;
                 }
                 catch(Exception)
@@ -179,7 +173,6 @@ namespace EbestTradeBot.Client.Services.Trade
                     await Task.Delay(_defaultOptions.ReplySecond * 1000);
                 }
             }
-
         }
 
         public async Task StopTrade()
@@ -191,6 +184,28 @@ namespace EbestTradeBot.Client.Services.Trade
             StopTradeEvent?.Invoke(this, new());
 
             WriteLog?.Invoke(this, new LogEventArgs("매매를 성공적으로 종료했습니다."));
+        }
+
+        private async Task SellAllStocks()
+        {
+            var accountStocks = await GetAccountStocks();
+            if (_cancellationTokenSource.Token.IsCancellationRequested) return;
+
+            var tradingStocks = await GetTradingShcodes();
+            if (_cancellationTokenSource.Token.IsCancellationRequested) return;
+
+            foreach (var stock in accountStocks)
+            {
+                if (
+                    !tradingStocks.Contains(stock.Shcode)) // 현재 매매중인 종목이 아님
+                {
+                    // 매도
+                    WriteLog?.Invoke(this, new LogEventArgs($"[{stock.Hname}({stock.Shcode})] [매도]"));
+                    await _log.WriteLog(new() { StockName = stock.Hname, Note = "매도" });
+                    await SellStock(stock);
+                    if (_cancellationTokenSource.Token.IsCancellationRequested) break;
+                }
+            }
         }
 
         private async Task<List<string>> GetTradingShcodes()
@@ -238,7 +253,6 @@ namespace EbestTradeBot.Client.Services.Trade
                 var tradingPrice = tradingPriceData.FirstOrDefault(x => x.Shcode == stock.Shcode);
                 if (tradingPrice != null)
                 {
-                    stock.매수가_2차 = tradingPrice.매수가_2차;
                     stock.익절가 = tradingPrice.익절가;
                     stock.손절가 = tradingPrice.손절가;
                 }
@@ -251,8 +265,6 @@ namespace EbestTradeBot.Client.Services.Trade
                 Date = DateTime.Now.ToString("yyyyMMdd"),
                 Hname = x.Hname,
                 Shcode = x.Shcode,
-                평단가 = x.평단가,
-                매수가_2차 = x.매수가_2차,
                 익절가 = x.익절가,
                 손절가 = x.손절가
             }).ToList();

@@ -1,4 +1,5 @@
 ﻿using Prism.Mvvm;
+using System;
 
 namespace EbestTradeBot.Client
 {
@@ -18,18 +19,25 @@ namespace EbestTradeBot.Client
             set => SetProperty(ref _isTestTrade, value);
         }
 
-        private int _cooldownDay = 0;
-        public int CooldownDay
-        {
-            get => _cooldownDay;
-            set => SetProperty(ref _cooldownDay, value);
-        }
-
         private int _replySecond = 0;
         public int ReplySecond
         {
             get => _replySecond;
             set => SetProperty(ref _replySecond, value);
+        }
+
+        public DateTime _startTime = DateTime.MinValue;
+        public DateTime StartTime
+        {
+            get => _startTime;
+            set => SetProperty(ref _startTime, value);
+        }
+
+        public DateTime _endTime = DateTime.MinValue;
+        public DateTime EndTime
+        {
+            get => _endTime;
+            set => SetProperty(ref _endTime, value);
         }
     }
 }

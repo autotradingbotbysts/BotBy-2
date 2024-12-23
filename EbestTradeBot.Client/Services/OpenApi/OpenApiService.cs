@@ -32,7 +32,7 @@ namespace EbestTradeBot.Client.Services.OpenApi
         private string _token = string.Empty;
 
         private static readonly SemaphoreSlim _t1101Semaphore = new(1, 1);
-        private static readonly SemaphoreSlim _t1305Semaphore = new(1, 1);
+        private static readonly SemaphoreSlim _t1302Semaphore = new(1, 1);
         private static readonly SemaphoreSlim _CSPAT00601Semaphore = new(1, 1); 
 
         public async Task<List<Stock>> GetAccountStocks(CancellationToken cancellationToken)
@@ -157,7 +157,7 @@ namespace EbestTradeBot.Client.Services.OpenApi
             client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             client.DefaultRequestHeaders.AcceptCharset.Add(new StringWithQualityHeaderValue("utf-8"));
             client.DefaultRequestHeaders.Add("authorization", $"Bearer {_token}"); // OAuth 토큰
-            client.DefaultRequestHeaders.Add("tr_cd", "t1305"); // 거래 코드
+            client.DefaultRequestHeaders.Add("tr_cd", "t1302"); // 거래 코드
             client.DefaultRequestHeaders.Add("tr_cont", "N"); // 연속 거래 여부
             client.DefaultRequestHeaders.Add("tr_cont_key", ""); // 연속키
             client.DefaultRequestHeaders.Add("mac_address", ""); // MAC 주소
@@ -166,16 +166,15 @@ namespace EbestTradeBot.Client.Services.OpenApi
             {
                 try
                 {
-                    await _t1305Semaphore.WaitAsync();
+                    await _t1302Semaphore.WaitAsync();
                     var jsonString = JsonSerializer.Serialize(new
                     {
-                        t1305InBlock = new
+                        t1302InBlock = new
                         {
                             shcode = stock.Shcode,
-                            dwmcode = 1,
-                            date = "",
-                            idx = 0,
-                            cnt = _openApiOptions.DayCount
+                            gubun = "1",
+                            time = "",
+                            cnt = _openApiOptions.MinuteCount
                         }
                     });
                     var content = new StringContent(jsonString, Encoding.UTF8, "application/json");
@@ -189,10 +188,9 @@ namespace EbestTradeBot.Client.Services.OpenApi
 
                     var responseString = await response.Content.ReadAsStringAsync(cancellationToken);
                     if (cancellationToken.IsCancellationRequested) return;
-                    var t1305Response = JsonSerializer.Deserialize<T1305Response>(responseString) ?? throw new Exception($"{responseString}");
+                    var t1302Response = JsonSerializer.Deserialize<T1302Response>(responseString) ?? throw new Exception($"{responseString}");
                     
-                    CalcPrice(stock, t1305Response.T1305OutBlock1);
-                    
+                    CalcPrice(stock, t1302Response.T1302OutBlock1);
                 }
                 catch (Exception ex)
                 {
@@ -201,7 +199,7 @@ namespace EbestTradeBot.Client.Services.OpenApi
                 finally
                 {
                     await Task.Delay(1100);
-                    _t1305Semaphore.Release();
+                    _t1302Semaphore.Release();
                 }
             }
         }
@@ -471,99 +469,26 @@ namespace EbestTradeBot.Client.Services.OpenApi
             }
         }
 
-        private static void CalcPrice(Stock stock, List<T1305OutBlock1> t1305s)
+        private static void CalcPrice(Stock stock, List<T1302OutBlock1> t1302s)
         {
-            // 기준봉 구하기
-            int count = t1305s.Count;
+            if (stock.평단가 < 0 || t1302s.Count < 2) return;
 
             stock.익절가 = int.MinValue;
             stock.손절가 = int.MinValue;
-            stock.매수가_1차 = int.MinValue;
-            stock.매수가_2차 = int.MinValue;
 
-            for (int i = 0; i < t1305s.Count; i++)
+            // close의 평균 구하기
+            var closeSum = t1302s.Sum(x => x.Close);
+            var closeAvg = (double)closeSum / t1302s.Count;
+
+            stock.익절가 = (int)closeAvg;
+            stock.손절가 = (int)(stock.평단가 * 0.97);
+
+            if (stock.익절가 == int.MinValue || stock.손절가 == int.MinValue)
             {
-                if (double.Parse(t1305s[i].Diff) < 15) continue;
-
-                stock.손절가 = Get손절가(t1305s, i);
-                stock.익절가 = Get익절가(t1305s, i);
-
-                break;
-            }
-            stock.매수가_1차 = (stock.손절가 + stock.익절가) / 2;
-            stock.매수가_2차 = (stock.매수가_1차 + stock.손절가) / 2;
-            if (stock.매수가_1차 == int.MinValue || stock.익절가 == int.MinValue || stock.손절가 == int.MinValue || stock.매수가_2차 == int.MinValue)
-            {
-                stock.매수가_1차 = int.MinValue;
-                stock.매수가_2차 = int.MinValue;
                 stock.익절가 = int.MinValue;
                 stock.손절가 = int.MinValue;
 
                 return;
-            }
-        }
-
-        private static int Get익절가(List<T1305OutBlock1> t1305s, int index)
-        {
-            int nextIndex = index - 1;
-            if(nextIndex < 0)
-            {
-                return t1305s[index].Close;
-            }
-
-            if (double.Parse(t1305s[nextIndex].Diff) > 0)
-            {
-                if (t1305s[nextIndex].Close > t1305s[index].Close)
-                {
-                    return Get익절가(t1305s, nextIndex);
-                }
-                else
-                {
-                    return t1305s[index].Close;
-                }
-            }
-            else
-            {
-                if (t1305s[nextIndex].Open > t1305s[index].Close)
-                {
-                    return Get익절가(t1305s, nextIndex);
-                }
-                else
-                {
-                    return t1305s[index].Close;
-                }
-            }
-        }
-
-        private static int Get손절가(List<T1305OutBlock1> t1305s, int index)
-        {
-            int preIndex = index + 1;
-            if (preIndex >= t1305s.Count)
-            {
-                return t1305s[index].Close;
-            }
-
-            if (double.Parse(t1305s[preIndex].Diff) > 0)
-            {
-                if (t1305s[preIndex].Open < t1305s[index].Open)
-                {
-                    return Get손절가(t1305s, preIndex);
-                }
-                else
-                {
-                    return t1305s[index].Open;
-                }
-            }
-            else
-            {
-                if (t1305s[preIndex].Close < t1305s[index].Open)
-                {
-                    return Get손절가(t1305s, preIndex);
-                }
-                else
-                {
-                    return t1305s[index].Open;
-                }
             }
         }
     }

@@ -18,11 +18,11 @@ namespace EbestTradeBot.Client.Services.OpenApi
             set => SetProperty(ref _secretKey, value);
         }
 
-        private int _dayCount = 0;
-        public int DayCount
+        private int _minuteCount = 0;
+        public int MinuteCount
         {
-            get => _dayCount;
-            set => SetProperty(ref _dayCount, value);
+            get => _minuteCount;
+            set => SetProperty(ref _minuteCount, value);
         }
     }
 }

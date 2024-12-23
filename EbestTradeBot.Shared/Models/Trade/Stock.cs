@@ -13,7 +13,6 @@ namespace EbestTradeBot.Shared.Models.Trade
         public int 손절가 { get; set; } = int.MinValue;
         public int 익절가 { get; set; } = int.MinValue;
         public int 평단가 { get; set; } = int.MinValue;
-        public int 매수가_2차 { get; set; } = int.MinValue;
         public int 보유량 { get; set; } = int.MinValue;
         public int 현재가 { get; set; } = int.MinValue;
 
@@ -30,7 +29,6 @@ namespace EbestTradeBot.Shared.Models.Trade
             손절가 = other.손절가;
             익절가 = other.익절가;
             평단가 = other.평단가;
-            매수가_2차 = other.매수가_2차;
             보유량 = other.보유량;
             현재가 = other.현재가;
         }
