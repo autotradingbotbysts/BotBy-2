@@ -266,7 +266,8 @@ namespace EbestTradeBot.Client.Services.Trade
                 Hname = x.Hname,
                 Shcode = x.Shcode,
                 익절가 = x.익절가,
-                손절가 = x.손절가
+                손절가 = x.손절가,
+                평단가 = x.평단가
             }).ToList();
             WriteDataToCsv(nonCalcTradingPriceData);
 
@@ -384,8 +385,7 @@ namespace EbestTradeBot.Client.Services.Trade
                                 $"[{stock.Hname}({stock.Shcode})] " +
                                 $"[익절가:{stock.익절가}] " +
                                 $"[손절가:{stock.손절가}] " +
-                                $"[평단가:{stock.평단가}] " +
-                                $"[2차 매수가:{stock.매수가_2차}]"));
+                                $"[평단가:{stock.평단가}] "));
             }
 
             using var writer = new StreamWriter(filePath, true);
