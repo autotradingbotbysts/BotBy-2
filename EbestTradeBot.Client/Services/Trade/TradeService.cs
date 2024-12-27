@@ -62,8 +62,7 @@ namespace EbestTradeBot.Client.Services.Trade
         {
             WriteLog?.Invoke(this, new LogEventArgs("매매를 시작합니다."));
             _cancellationTokenSource = new();
-            await _openApi.InitToken(_cancellationTokenSource.Token);
-            if (_cancellationTokenSource.Token.IsCancellationRequested) return;
+            await InitToken();
 
             while (!_cancellationTokenSource.Token.IsCancellationRequested)
             {
@@ -136,7 +135,16 @@ namespace EbestTradeBot.Client.Services.Trade
                         }
                     });
                 }
-                catch(MarketClosedException)
+                catch (ArgumentException ex)
+                {
+                    WriteLog?.Invoke(this, new LogEventArgs(ex.Message));
+                }
+                catch (InvalidTokenException ex)
+                {
+                    WriteLog?.Invoke(this, new LogEventArgs($"[{ex.Code}] {ex.Message}"));
+                    await InitToken();
+                }
+                catch (MarketClosedException)
                 {
                     if(_isMesu)
                     {
@@ -180,10 +188,21 @@ namespace EbestTradeBot.Client.Services.Trade
             WriteLog?.Invoke(this, new LogEventArgs("매매를 종료합니다."));
 
             _cancellationTokenSource.Cancel();
-            await _openApi.RevokeToken();
+            await RevokeToken();
             StopTradeEvent?.Invoke(this, new());
 
             WriteLog?.Invoke(this, new LogEventArgs("매매를 성공적으로 종료했습니다."));
+        }
+        private async Task RevokeToken()
+        {
+            await _openApi.RevokeToken();
+            WriteLog?.Invoke(this, new LogEventArgs("토큰을 성공적으로 폐기했습니다."));
+        }
+        private async Task InitToken()
+        {
+            await _openApi.InitToken(_cancellationTokenSource.Token);
+            if(_cancellationTokenSource.Token.IsCancellationRequested) return;
+            WriteLog?.Invoke(this, new LogEventArgs("토큰을 성공적으로 초기화했습니다."));
         }
 
         private async Task SellAllStocks()

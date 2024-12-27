@@ -1,5 +1,5 @@
-﻿using CsvHelper;
-using EbestTradeBot.Client.Services.OpenApi.Responses;
+﻿using EbestTradeBot.Client.Services.OpenApi.Responses;
+using EbestTradeBot.Shared.Exceptions;
 using EbestTradeBot.Shared.Models.Trade;
 using Microsoft.Extensions.Options;
 using System;
@@ -8,11 +8,11 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Windows.Media.Media3D;
 
 namespace EbestTradeBot.Client.Services.OpenApi
 {
@@ -33,7 +33,13 @@ namespace EbestTradeBot.Client.Services.OpenApi
 
         private static readonly SemaphoreSlim _t1101Semaphore = new(1, 1);
         private static readonly SemaphoreSlim _t1302Semaphore = new(1, 1);
-        private static readonly SemaphoreSlim _CSPAT00601Semaphore = new(1, 1); 
+        private static readonly SemaphoreSlim _CSPAT00601Semaphore = new(1, 1);
+
+        private static readonly JsonSerializerOptions _options = new()
+        {
+            WriteIndented = true,
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        };
 
         public async Task<List<Stock>> GetAccountStocks(CancellationToken cancellationToken)
         {
@@ -59,39 +65,33 @@ namespace EbestTradeBot.Client.Services.OpenApi
             });
             var content = new StringContent(jsonString, Encoding.UTF8, "application/json");
 
-            try
+            var response = await client.PostAsync($"{_url}{_accnoPath}", content, cancellationToken);
+            if (cancellationToken.IsCancellationRequested) return [];
+
+            if (!response.IsSuccessStatusCode)
             {
-                var response = await client.PostAsync($"{_url}{_accnoPath}", content, cancellationToken);
-                if (cancellationToken.IsCancellationRequested) return [];
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    throw new Exception($"응답 실패: {response.StatusCode}");
-                }
-                string responseString = await response.Content.ReadAsStringAsync(cancellationToken);
-                if (cancellationToken.IsCancellationRequested) return [];
-
-                var responseData = JsonSerializer.Deserialize<T0424Response>(responseString) ?? throw new Exception($"{responseString}");
-                content.Dispose();
-                response.Dispose();
-                var stocks = new List<Stock>();
-                foreach (var data in responseData.T0424OutBlock1)
-                {
-                    stocks.Add(new Stock
-                    {
-                        Shcode = data.Expcode,
-                        Hname = data.Hname,
-                        보유량 = data.Mdposqt,
-                        평단가 = data.Pamt,
-                    });
-                }
-
-                return stocks;
+                var errorMessage = await response.Content.ReadAsStringAsync(cancellationToken);
+                ThrowErrorByMessage(errorMessage);
             }
-            catch (Exception ex)
+            string responseString = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (cancellationToken.IsCancellationRequested) return [];
+
+            var responseData = JsonSerializer.Deserialize<T0424Response>(responseString) ?? throw new Exception($"{responseString}");
+            content.Dispose();
+            response.Dispose();
+            var stocks = new List<Stock>();
+            foreach (var data in responseData.T0424OutBlock1)
             {
-                throw new Exception($"[GetAccountStocks] [{ex.Message}]");
+                stocks.Add(new Stock
+                {
+                    Shcode = data.Expcode,
+                    Hname = data.Hname,
+                    보유량 = data.Mdposqt,
+                    평단가 = data.Pamt,
+                });
             }
+
+            return stocks;
         }
 
         public async Task GetCurrentPrice(List<Stock> stocks, CancellationToken cancellationToken)
@@ -126,7 +126,8 @@ namespace EbestTradeBot.Client.Services.OpenApi
 
                     if (!response.IsSuccessStatusCode)
                     {
-                        throw new Exception($"응답 실패: {response.StatusCode}");
+                        var errorMessage = await response.Content.ReadAsStringAsync(cancellationToken);
+                        ThrowErrorByMessage(errorMessage);
                     }
 
                     string responseString = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -138,10 +139,6 @@ namespace EbestTradeBot.Client.Services.OpenApi
 
                     content.Dispose();
                     response.Dispose();
-                }
-                catch (Exception ex)
-                {
-                    throw new Exception($"[SetTradingPrice] [{ex.Message}]");
                 }
                 finally
                 {
@@ -183,7 +180,8 @@ namespace EbestTradeBot.Client.Services.OpenApi
 
                     if (!response.IsSuccessStatusCode)
                     {
-                        throw new Exception($"응답 실패: {response.StatusCode}");
+                        var errorMessage = await response.Content.ReadAsStringAsync(cancellationToken);
+                        ThrowErrorByMessage(errorMessage);
                     }
 
                     var responseString = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -191,10 +189,6 @@ namespace EbestTradeBot.Client.Services.OpenApi
                     var t1302Response = JsonSerializer.Deserialize<T1302Response>(responseString) ?? throw new Exception($"{responseString}");
                     
                     CalcPrice(stock, t1302Response.T1302OutBlock1);
-                }
-                catch (Exception ex)
-                {
-                    throw new Exception($"[SetTradingPrice] [{ex.Message}]");
                 }
                 finally
                 {
@@ -246,7 +240,8 @@ namespace EbestTradeBot.Client.Services.OpenApi
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    throw new Exception($"응답 실패: {response.StatusCode}");
+                    var errorMessage = await response.Content.ReadAsStringAsync(cancellationToken);
+                    ThrowErrorByMessage(errorMessage);
                 }
 
                 string responseString = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -258,10 +253,6 @@ namespace EbestTradeBot.Client.Services.OpenApi
                 response.Dispose();
 
                 return orderResponseData;
-            }
-            catch (Exception ex)
-            {
-                throw new Exception($"[BuyStock] [{ex.Message}]");
             }
             finally
             {
@@ -312,7 +303,8 @@ namespace EbestTradeBot.Client.Services.OpenApi
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    throw new Exception($"응답 실패: {response.StatusCode}");
+                    var errorMessage = await response.Content.ReadAsStringAsync(cancellationToken);
+                    ThrowErrorByMessage(errorMessage);
                 }
 
                 string responseString = await response.Content.ReadAsStringAsync(cancellationToken);
@@ -324,10 +316,6 @@ namespace EbestTradeBot.Client.Services.OpenApi
                 response.Dispose();
 
                 return orderResponseData;
-            }
-            catch (Exception ex)
-            {
-                throw new Exception($"[SellStock] [{ex.Message}]");
             }
             finally
             {
@@ -351,29 +339,23 @@ namespace EbestTradeBot.Client.Services.OpenApi
 
             var content = new FormUrlEncodedContent(parameters);
 
-            try
+            var response = await client.PostAsync($"{_url}{_tokenPath}", content, cancellationToken);
+            if (cancellationToken.IsCancellationRequested) return new();
+
+            string responseString = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (cancellationToken.IsCancellationRequested) return new();
+
+            var responseData = JsonSerializer.Deserialize<TokenResponse>(responseString) ?? throw new Exception($"{responseString}");
+
+            if (!response.IsSuccessStatusCode)
             {
-                var response = await client.PostAsync($"{_url}{_tokenPath}", content, cancellationToken);
-                if (cancellationToken.IsCancellationRequested) return new();
-
-                string responseString = await response.Content.ReadAsStringAsync(cancellationToken);
-                if (cancellationToken.IsCancellationRequested) return new();
-
-                var responseData = JsonSerializer.Deserialize<TokenResponse>(responseString) ?? throw new Exception($"{responseString}");
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    throw new Exception($"응답 실패: {response.StatusCode}");
-                }
-
-                _token = responseData.AccessToken;
-
-                return responseData;
+                var errorMessage = await response.Content.ReadAsStringAsync(cancellationToken);
+                ThrowErrorByMessage(errorMessage);
             }
-            catch (Exception ex)
-            {
-                throw new Exception($"[InitToken] [{ex.Message}]");
-            }
+
+            _token = responseData.AccessToken;
+
+            return responseData;
         }
 
         public async Task<RevokeResponse> RevokeToken()
@@ -391,26 +373,20 @@ namespace EbestTradeBot.Client.Services.OpenApi
 
             var content = new FormUrlEncodedContent(parameters);
 
-            try
+            var response = await client.PostAsync($"{_url}{_tokenRevokePath}", content);
+
+            string responseString = await response.Content.ReadAsStringAsync();
+            var responseData = JsonSerializer.Deserialize<RevokeResponse>(responseString) ?? throw new Exception($"{responseString}");
+
+            if(!response.IsSuccessStatusCode)
             {
-                var response = await client.PostAsync($"{_url}{_tokenRevokePath}", content);
-
-                string responseString = await response.Content.ReadAsStringAsync();
-                var responseData = JsonSerializer.Deserialize<RevokeResponse>(responseString) ?? throw new Exception($"{responseString}");
-
-                if(!response.IsSuccessStatusCode)
-                {
-                    throw new Exception($"응답 실패: {response.StatusCode}");
-                }
-
-                _token = string.Empty;
-
-                return responseData;
+                var errorMessage = await response.Content.ReadAsStringAsync();
+                ThrowErrorByMessage(errorMessage);
             }
-            catch (Exception ex)
-            {
-                throw new Exception($"[RevokeToken] [{ex.Message}]");
-            }
+
+            _token = string.Empty;
+
+            return responseData;
         }
 
         public async Task<List<Stock>> GetTradingStocks(CancellationToken cancellationToken)
@@ -437,36 +413,44 @@ namespace EbestTradeBot.Client.Services.OpenApi
             });
             var content = new StringContent(jsonString, Encoding.UTF8, "application/json");
 
-            try
+            var response = await client.PostAsync($"{_url}{_accnoPath}", content, cancellationToken);
+            if (cancellationToken.IsCancellationRequested) return [];
+
+            if (!response.IsSuccessStatusCode)
             {
-                var response = await client.PostAsync($"{_url}{_accnoPath}", content, cancellationToken);
-                if (cancellationToken.IsCancellationRequested) return [];
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    throw new Exception($"응답 실패: {response.StatusCode}");
-                }
-                string responseString = await response.Content.ReadAsStringAsync(cancellationToken);
-                if (cancellationToken.IsCancellationRequested) return [];
-
-                var responseData = JsonSerializer.Deserialize<T0425Response>(responseString) ?? throw new Exception($"{responseString}");
-                content.Dispose();
-                response.Dispose();
-                var stocks = new List<Stock>();
-                foreach (var data in responseData.T0425OutBlock1)
-                {
-                    stocks.Add(new Stock
-                    {
-                        Shcode = data.Expcode,
-                    });
-                }
-
-                return stocks;
+                var errorMessage = await response.Content.ReadAsStringAsync(cancellationToken);
+                ThrowErrorByMessage(errorMessage);
             }
-            catch (Exception ex)
+            string responseString = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (cancellationToken.IsCancellationRequested) return [];
+
+            var responseData = JsonSerializer.Deserialize<T0425Response>(responseString) ?? throw new Exception($"{responseString}");
+            content.Dispose();
+            response.Dispose();
+            var stocks = new List<Stock>();
+            foreach (var data in responseData.T0425OutBlock1)
             {
-                throw new Exception($"[GetAccountStocks] [{ex.Message}]");
+                stocks.Add(new Stock
+                {
+                    Shcode = data.Expcode,
+                });
             }
+
+            return stocks;
+        }
+
+        private static void ThrowErrorByMessage(string errorMsg)
+        {
+            var error = JsonSerializer.Deserialize<ErrorResponse>(errorMsg, _options) ?? throw new Exception("Failed to deserialize error message.");
+            var code = error.RspCd;
+            var message = error.RspMsg;
+
+            throw code switch
+            {
+                "IGW00121" => new InvalidTokenException(code, message), // 유효하지 않은 token 입니다.
+                "IGW00105" => new ArgumentException($"[{code}] {message}"), // 유효하지 않은 AppSecret입니다.
+                _ => new Exception($"[{code}] {message}"),
+            };
         }
 
         private static void CalcPrice(Stock stock, List<T1302OutBlock1> t1302s)
