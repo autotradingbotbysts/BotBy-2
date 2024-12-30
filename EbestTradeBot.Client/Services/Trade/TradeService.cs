@@ -179,7 +179,7 @@ namespace EbestTradeBot.Client.Services.Trade
                         _searchTaskCompletionSource.SetCanceled();
                     }
                     await Task.Delay(_defaultOptions.ReplySecond * 1000);
-                }
+                 }
             }
         }
 

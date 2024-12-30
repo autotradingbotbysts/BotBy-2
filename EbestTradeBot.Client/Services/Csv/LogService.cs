@@ -16,7 +16,13 @@ namespace EbestTradeBot.Client.Services.Log
         {
             lock (_lock)
             {
-                bool fileExists = File.Exists(_filePath + "log.csv");
+                var filePath = _filePath + "log.csv";
+                bool fileExists = File.Exists(filePath);
+
+                if (!fileExists)
+                {
+                    File.Create(filePath).Close();
+                }
 
                 using var writer = new StreamWriter(_filePath + "log.csv", true);
                 using var csv = new CsvWriter(writer, new CsvConfiguration(CultureInfo.InvariantCulture) { HasHeaderRecord = !fileExists });
