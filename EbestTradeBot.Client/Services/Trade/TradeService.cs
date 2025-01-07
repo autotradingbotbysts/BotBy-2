@@ -87,16 +87,12 @@ namespace EbestTradeBot.Client.Services.Trade
                     if (_cancellationTokenSource.Token.IsCancellationRequested) break;
 
                     var searchedStocks = new List<Stock>();
-                    if(accountStocksForBuying.Count == 0)
+                    if (!_isMesu)
                     {
-                        if (!_isMesu)
-                        {
-                            searchedStocks = await SearchStocks();
-                            _isMesu = true;
-                            if (_cancellationTokenSource.Token.IsCancellationRequested) break;
-                        }
+                        searchedStocks = await SearchStocks();
+                        if (_cancellationTokenSource.Token.IsCancellationRequested) break;
                     }
-
+                    
                     var accountStocksForSelling = DeepCopyStocks(accountStocksForBuying);
                     if (_cancellationTokenSource.Token.IsCancellationRequested) break;
 
@@ -117,6 +113,7 @@ namespace EbestTradeBot.Client.Services.Trade
                                 await _log.WriteLog(new() { StockName = stock.Hname, Note = "매수" });
                                 await BuyStock(stock);
                                 if (_cancellationTokenSource.Token.IsCancellationRequested) break;
+                                _isMesu = true;
                             }
                         }
                     });
