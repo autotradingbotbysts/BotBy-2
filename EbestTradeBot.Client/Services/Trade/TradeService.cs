@@ -83,16 +83,19 @@ namespace EbestTradeBot.Client.Services.Trade
                         throw new MarketClosedException();
                     }
 
-                    var searchedStocks = new List<Stock>();
-                    if (!_isMesu)
-                    {
-                        searchedStocks = await SearchStocks();
-                        _isMesu = true;
-                        if (_cancellationTokenSource.Token.IsCancellationRequested) break;
-                    }
-
                     var accountStocksForBuying = await GetAccountStocks();
                     if (_cancellationTokenSource.Token.IsCancellationRequested) break;
+
+                    var searchedStocks = new List<Stock>();
+                    if(accountStocksForBuying.Count == 0)
+                    {
+                        if (!_isMesu)
+                        {
+                            searchedStocks = await SearchStocks();
+                            _isMesu = true;
+                            if (_cancellationTokenSource.Token.IsCancellationRequested) break;
+                        }
+                    }
 
                     var accountStocksForSelling = DeepCopyStocks(accountStocksForBuying);
                     if (_cancellationTokenSource.Token.IsCancellationRequested) break;
