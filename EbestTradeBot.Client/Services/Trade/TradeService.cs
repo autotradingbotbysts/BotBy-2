@@ -373,6 +373,9 @@ namespace EbestTradeBot.Client.Services.Trade
                 });
             }
 
+            _xaQuery_t1857.ClearBlockdata("t1857OutBlock");
+            _xaQuery_t1857.ClearBlockdata("t1857OutBlock1");
+
             _searchTaskCompletionSource?.SetResult(stocks);
         }
 
